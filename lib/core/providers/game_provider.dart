@@ -38,11 +38,24 @@ class GameProvider extends ChangeNotifier {
     required String horseId,
     required double amount,
   }) {
-    _socketService.placeBet(
-      raceId: raceId,
-      horseId: horseId,
-      amount: amount,
-    );
+    try {
+      _socketService.placeBet(
+        raceId: raceId,
+        horseId: horseId,
+        amount: amount,
+      );
+    } catch (error) {
+      final message = error is StateError ? error.message : error.toString();
+      _error = 'Unable to place bet: $message';
+      notifyListeners();
+    }
+  }
+
+  void resetSession() {
+    _myBetsThisRound.clear();
+    _lastBetResult = null;
+    _error = null;
+    notifyListeners();
   }
 
   void clearLastBetResult() {

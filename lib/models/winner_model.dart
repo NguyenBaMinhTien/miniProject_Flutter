@@ -1,14 +1,14 @@
 import 'package:flutter/foundation.dart';
 
 class WinnerModel {
-  const WinnerModel({
+  WinnerModel({
     required this.raceId,
     required this.raceNumber,
     required this.horseId,
     required this.horseName,
-    required this.rankings,
+    required List<String> rankings,
     required this.finishedAt,
-  });
+  }) : rankings = List<String>.unmodifiable(rankings);
 
   factory WinnerModel.fromJson(Map<String, dynamic> json) {
     return WinnerModel(
@@ -35,7 +35,7 @@ class WinnerModel {
         'raceNumber': raceNumber,
         'horseId': horseId,
         'horseName': horseName,
-        'rankings': rankings,
+        'rankings': List<String>.from(rankings),
         'finishedAt': finishedAt.toUtc().toIso8601String(),
       };
 

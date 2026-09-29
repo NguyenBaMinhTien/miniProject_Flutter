@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_horse_racing/core/network/api_client.dart';
 import 'package:flutter_horse_racing/core/network/api_exception.dart';
 import 'package:flutter_horse_racing/core/network/mock_api_client.dart';
@@ -98,6 +100,28 @@ void main() {
     provider.dispose();
     await socket.dispose();
   });
+
+  test('session reset discards a pending wallet response', () async {
+    final socket = MockSocketService();
+    final api = DelayedWalletApiClient();
+    final provider = WalletProvider(
+      apiClient: api,
+      socketService: socket,
+      initialCash: 50000,
+    );
+
+    final loadFuture = provider.loadTransactions();
+    await pumpEventQueue();
+    provider.resetSession();
+    api.completeWallet(cash: 90000);
+
+    expect(await loadFuture, isFalse);
+    expect(provider.cash, 0);
+    expect(provider.transactions, isEmpty);
+    expect(provider.isLoading, isFalse);
+    provider.dispose();
+    await socket.dispose();
+  });
 }
 
 class FailingWalletApiClient implements ApiClient {
@@ -115,4 +139,22 @@ class FailingWalletApiClient implements ApiClient {
   }) {
     throw const ApiException('Wallet unavailable', statusCode: 503);
   }
+}
+
+class DelayedWalletApiClient implements ApiClient {
+  final _response = Completer<Map<String, dynamic>>();
+
+  void completeWallet({required double cash}) {
+    _response.complete({'cash': cash, 'transactions': <dynamic>[]});
+  }
+
+  @override
+  Future<Map<String, dynamic>> get(String path) => _response.future;
+
+  @override
+  Future<Map<String, dynamic>> post(
+    String path, {
+    Map<String, dynamic>? body,
+  }) =>
+      _response.future;
 }

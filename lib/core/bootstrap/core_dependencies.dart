@@ -87,16 +87,20 @@ class CoreDependencies {
     required SocketService socketService,
     required double initialCash,
   }) {
-    final authProvider = AuthProvider(
-      apiClient: apiClient,
-      storage: storage,
-      socketService: socketService,
-    );
     final gameProvider = GameProvider(socketService: socketService);
     final walletProvider = WalletProvider(
       apiClient: apiClient,
       socketService: socketService,
       initialCash: initialCash,
+    );
+    final authProvider = AuthProvider(
+      apiClient: apiClient,
+      storage: storage,
+      socketService: socketService,
+      onSessionEnded: () {
+        gameProvider.resetSession();
+        walletProvider.resetSession();
+      },
     );
     return CoreDependencies._(
       config: config,

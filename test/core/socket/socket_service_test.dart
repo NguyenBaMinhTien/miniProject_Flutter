@@ -138,11 +138,73 @@ void main() {
     expect(socket.isConnected, isFalse);
     await socket.dispose();
   });
+
+  test('connection completing after disconnect is rejected as stale', () async {
+    final connection = FakeSocketConnection();
+    final pendingConnection = Completer<SocketConnection>();
+    final socket = LiveSocketService(
+      url: 'ws://example.test',
+      connector: (_) => pendingConnection.future,
+    );
+
+    final connectFuture = socket.connect();
+    await pumpEventQueue();
+    await socket.disconnect();
+    pendingConnection.complete(connection);
+    await connectFuture;
+
+    expect(socket.isConnected, isFalse);
+    expect(connection.wasClosed, isTrue);
+    await socket.dispose();
+  });
+
+  test('concurrent connect calls share one connection attempt', () async {
+    final connection = FakeSocketConnection();
+    final pendingConnection = Completer<SocketConnection>();
+    var connectorCalls = 0;
+    final socket = LiveSocketService(
+      url: 'ws://example.test',
+      connector: (_) {
+        connectorCalls++;
+        return pendingConnection.future;
+      },
+    );
+
+    final firstConnect = socket.connect();
+    final secondConnect = socket.connect();
+    pendingConnection.complete(connection);
+    await Future.wait([firstConnect, secondConnect]);
+
+    expect(connectorCalls, 1);
+    expect(socket.isConnected, isTrue);
+    await socket.dispose();
+  });
+
+  test('explicit disconnect clears token before a new session connects',
+      () async {
+    final first = FakeSocketConnection();
+    final second = FakeSocketConnection();
+    final connections = [first, second];
+    var connectorCalls = 0;
+    final socket = LiveSocketService(
+      url: 'ws://example.test',
+      connector: (_) async => connections[connectorCalls++],
+    );
+    await socket.connect();
+    socket.authenticate('old-user-token');
+
+    await socket.disconnect();
+    await socket.connect();
+
+    expect(second.decodedSent, isEmpty);
+    await socket.dispose();
+  });
 }
 
 class FakeSocketConnection implements SocketConnection {
   final _incoming = StreamController<dynamic>();
   final sent = <dynamic>[];
+  bool wasClosed = false;
 
   @override
   Stream<dynamic> get stream => _incoming.stream;
@@ -160,6 +222,7 @@ class FakeSocketConnection implements SocketConnection {
 
   @override
   Future<void> close() async {
+    wasClosed = true;
     if (!_incoming.isClosed) {
       await _incoming.close();
     }

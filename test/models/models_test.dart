@@ -163,4 +163,71 @@ void main() {
     expect(race.status, 'BETTING');
     expect(bet.amount, 100);
   });
+
+  test('race and winner collections are defensively immutable', () {
+    final horses = <HorseModel>[
+      const HorseModel(
+        id: 'horse_1',
+        name: 'Xich Tho',
+        color: 'red',
+        odds: 2,
+        lane: 1,
+      ),
+    ];
+    final positions = <String, double>{'horse_1': 10};
+    final rankings = <String>['horse_1'];
+    final race = RaceStateModel(
+      raceId: 'race_1',
+      raceNumber: 1,
+      phase: RacePhase.racing,
+      countdown: 0,
+      horses: horses,
+      positions: positions,
+    );
+    final winner = WinnerModel(
+      raceId: 'race_1',
+      raceNumber: 1,
+      horseId: 'horse_1',
+      horseName: 'Xich Tho',
+      rankings: rankings,
+      finishedAt: DateTime.utc(2026, 9, 29),
+    );
+
+    horses.clear();
+    positions['horse_1'] = 99;
+    rankings.add('horse_2');
+    final raceJson = race.toJson();
+    (raceJson['positions'] as Map<String, double>)['horse_1'] = 77;
+    final winnerJson = winner.toJson();
+    (winnerJson['rankings'] as List<String>).add('horse_3');
+
+    expect(race.horses, hasLength(1));
+    expect(race.positions, {'horse_1': 10});
+    expect(winner.rankings, ['horse_1']);
+    expect(() => race.positions['horse_2'] = 1, throwsUnsupportedError);
+    expect(() => winner.rankings.add('horse_2'), throwsUnsupportedError);
+  });
+
+  test('equal race states have equal stable hash codes', () {
+    final first = RaceStateModel(
+      raceId: 'race_1',
+      raceNumber: 1,
+      phase: RacePhase.racing,
+      countdown: 0,
+      horses: const [],
+      positions: {'horse_1': 10, 'horse_2': 20},
+    );
+    final second = RaceStateModel(
+      raceId: 'race_1',
+      raceNumber: 1,
+      phase: RacePhase.racing,
+      countdown: 0,
+      horses: const [],
+      positions: {'horse_2': 20, 'horse_1': 10},
+    );
+
+    expect(first, second);
+    expect(first.hashCode, second.hashCode);
+    expect({first}, contains(second));
+  });
 }

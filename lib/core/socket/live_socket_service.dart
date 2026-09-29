@@ -37,6 +37,8 @@ class LiveSocketService implements SocketService {
   bool _intentionalDisconnect = false;
   bool _disposed = false;
   bool _reconnecting = false;
+  int _connectionGeneration = 0;
+  Future<void>? _connectOperation;
 
   @override
   Stream<SocketEvent> get events => _events.stream;
@@ -51,17 +53,43 @@ class LiveSocketService implements SocketService {
     }
     if (_connected) return;
     _intentionalDisconnect = false;
-    await _open();
+    final generation = _connectionGeneration;
+    await _connectOnce(generation);
+    if (!_connected &&
+        !_intentionalDisconnect &&
+        !_disposed &&
+        generation == _connectionGeneration) {
+      await _connectOnce(generation);
+    }
   }
 
-  Future<void> _open() async {
+  Future<void> _connectOnce(int generation) {
+    final existing = _connectOperation;
+    if (existing != null) return existing;
+    late final Future<void> trackedOperation;
+    trackedOperation = _open(generation).whenComplete(() {
+      if (identical(_connectOperation, trackedOperation)) {
+        _connectOperation = null;
+      }
+    });
+    _connectOperation = trackedOperation;
+    return trackedOperation;
+  }
+
+  Future<void> _open(int generation) async {
     final connection = await _connector(Uri.parse(url));
+    if (_disposed ||
+        _intentionalDisconnect ||
+        generation != _connectionGeneration) {
+      unawaited(connection.close().catchError((_) {}));
+      return;
+    }
     _connection = connection;
     _connected = true;
     _subscription = connection.stream.listen(
       _onMessage,
       onError: _onStreamError,
-      onDone: _onStreamDone,
+      onDone: () => _onStreamDone(connection, generation),
       cancelOnError: false,
     );
     final token = _lastToken;
@@ -90,7 +118,13 @@ class LiveSocketService implements SocketService {
     );
   }
 
-  void _onStreamDone() {
+  void _onStreamDone(SocketConnection connection, int generation) {
+    if (!identical(_connection, connection) ||
+        generation != _connectionGeneration) {
+      return;
+    }
+    _connection = null;
+    _subscription = null;
     _connected = false;
     if (!_intentionalDisconnect && !_disposed) {
       unawaited(_reconnect());
@@ -100,15 +134,24 @@ class LiveSocketService implements SocketService {
   Future<void> _reconnect() async {
     if (_reconnecting) return;
     _reconnecting = true;
+    final generation = _connectionGeneration;
     try {
       for (var attempt = 0; attempt < maxReconnectAttempts; attempt++) {
-        if (_intentionalDisconnect || _disposed) return;
+        if (_intentionalDisconnect ||
+            _disposed ||
+            generation != _connectionGeneration) {
+          return;
+        }
         final multiplier = 1 << attempt.clamp(0, 5);
         await _reconnectDelay(Duration(seconds: multiplier));
-        if (_intentionalDisconnect || _disposed) return;
-        try {
-          await _open();
+        if (_intentionalDisconnect ||
+            _disposed ||
+            generation != _connectionGeneration) {
           return;
+        }
+        try {
+          await _connectOnce(generation);
+          if (_connected) return;
         } catch (error) {
           if (attempt == maxReconnectAttempts - 1) {
             _events.add(
@@ -160,7 +203,9 @@ class LiveSocketService implements SocketService {
 
   @override
   Future<void> disconnect() async {
+    _connectionGeneration++;
     _intentionalDisconnect = true;
+    _lastToken = null;
     _connected = false;
     final subscription = _subscription;
     _subscription = null;

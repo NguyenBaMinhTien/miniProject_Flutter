@@ -58,4 +58,29 @@ void main() {
     expect((dependencies.socketService as LiveSocketService).url, config.wsUrl);
     await dependencies.dispose();
   });
+
+  test('logout clears account-specific wallet and game state', () async {
+    final dependencies = await CoreDependencies.mock();
+    await dependencies.authProvider.login(
+      username: 'first-user',
+      password: 'secret',
+    );
+    await dependencies.walletProvider.mockDeposit(20000);
+    dependencies.gameProvider.placeBet(
+      raceId: 'race_1',
+      horseId: 'horse_1',
+      amount: 100,
+    );
+    await pumpEventQueue();
+    expect(dependencies.walletProvider.transactions, isNotEmpty);
+    expect(dependencies.gameProvider.myBetsThisRound, isNotEmpty);
+
+    await dependencies.authProvider.logout();
+
+    expect(dependencies.walletProvider.cash, 0);
+    expect(dependencies.walletProvider.transactions, isEmpty);
+    expect(dependencies.gameProvider.myBetsThisRound, isEmpty);
+    expect(dependencies.gameProvider.lastBetResult, isNull);
+    await dependencies.dispose();
+  });
 }

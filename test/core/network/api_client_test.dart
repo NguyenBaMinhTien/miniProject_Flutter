@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -116,6 +117,43 @@ void main() {
     expect(unauthorizedCalls, 1);
   });
 
+  test('malformed 401 still invokes callback and preserves status', () async {
+    var unauthorizedCalls = 0;
+    final api = HttpApiClient(
+      baseUrl: 'https://api.example.test',
+      client: MockClient((_) async => http.Response('', 401)),
+      onUnauthorized: () async => unauthorizedCalls++,
+    );
+
+    await expectLater(
+      api.get('/api/me'),
+      throwsA(
+        isA<ApiException>()
+            .having((error) => error.statusCode, 'statusCode', 401),
+      ),
+    );
+    expect(unauthorizedCalls, 1);
+  });
+
+  test('failing unauthorized cleanup does not replace HTTP 401', () async {
+    final api = HttpApiClient(
+      baseUrl: 'https://api.example.test',
+      client: MockClient(
+        (_) async => http.Response(jsonEncode({'message': 'Expired'}), 401),
+      ),
+      onUnauthorized: () async => throw StateError('cleanup failed'),
+    );
+
+    await expectLater(
+      api.get('/api/me'),
+      throwsA(
+        isA<ApiException>()
+            .having((error) => error.message, 'message', 'Expired')
+            .having((error) => error.statusCode, 'statusCode', 401),
+      ),
+    );
+  });
+
   test('transport failures map to a stable API exception', () async {
     final api = HttpApiClient(
       baseUrl: 'https://api.example.test',
@@ -132,4 +170,47 @@ void main() {
       ),
     );
   });
+
+  test('request timeout includes response body consumption', () async {
+    final client = HangingBodyClient();
+    final api = HttpApiClient(
+      baseUrl: 'https://api.example.test',
+      client: client,
+      requestTimeout: const Duration(milliseconds: 20),
+    );
+
+    try {
+      await expectLater(
+        api.get('/api/hanging').timeout(
+              const Duration(milliseconds: 200),
+              onTimeout: () => throw StateError('body timeout was not applied'),
+            ),
+        throwsA(
+          isA<ApiException>()
+              .having(
+                (error) => error.message,
+                'message',
+                'Network request failed',
+              )
+              .having((error) => error.cause, 'cause', isA<TimeoutException>()),
+        ),
+      );
+    } finally {
+      api.close();
+    }
+  });
+}
+
+class HangingBodyClient extends http.BaseClient {
+  final _body = StreamController<List<int>>();
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    return http.StreamedResponse(_body.stream, 200);
+  }
+
+  @override
+  void close() {
+    _body.close();
+  }
 }

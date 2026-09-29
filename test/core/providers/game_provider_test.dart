@@ -152,6 +152,24 @@ void main() {
     provider.dispose();
     await socket.dispose();
   });
+
+  test('placeBet failure updates provider error instead of escaping', () async {
+    final socket = MockSocketService();
+    final provider = GameProvider(socketService: socket);
+
+    expect(
+      () => provider.placeBet(
+        raceId: 'race_9',
+        horseId: 'horse_4',
+        amount: 500,
+      ),
+      returnsNormally,
+    );
+    expect(provider.error, 'Unable to place bet: WebSocket is not connected');
+
+    provider.dispose();
+    await socket.dispose();
+  });
 }
 
 Map<String, dynamic> racePayload() => {

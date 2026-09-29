@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_horse_racing/core/network/api_client.dart';
 import 'package:flutter_horse_racing/core/network/api_exception.dart';
 import 'package:flutter_horse_racing/core/network/mock_api_client.dart';
@@ -149,6 +151,96 @@ void main() {
     provider.dispose();
     await socket.dispose();
   });
+
+  test('logout invalidates a pending login response', () async {
+    final storage = await freshStorage();
+    final socket = MockSocketService();
+    final api = DelayedAuthApiClient();
+    final provider = AuthProvider(
+      apiClient: api,
+      storage: storage,
+      socketService: socket,
+    );
+
+    final loginFuture = provider.login(username: 'late', password: 'secret');
+    await pumpEventQueue();
+    await provider.logout();
+    api.completeLogin('late');
+
+    expect(await loginFuture, isFalse);
+    expect(provider.user, isNull);
+    expect(storage.getToken(), isNull);
+    expect(socket.isConnected, isFalse);
+    provider.dispose();
+    await socket.dispose();
+  });
+
+  test('dispose invalidates a pending login without notifying afterward',
+      () async {
+    final storage = await freshStorage();
+    final socket = MockSocketService();
+    final api = DelayedAuthApiClient();
+    final provider = AuthProvider(
+      apiClient: api,
+      storage: storage,
+      socketService: socket,
+    );
+
+    final loginFuture = provider.login(username: 'late', password: 'secret');
+    await pumpEventQueue();
+    provider.dispose();
+    api.completeLogin('late');
+
+    expect(await loginFuture, isFalse);
+    expect(storage.getToken(), isNull);
+    expect(socket.isConnected, isFalse);
+    await socket.dispose();
+  });
+
+  test('failed cleanup preserves original authentication error', () async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    final storage = FailingClearStorage(preferences);
+    final socket = MockSocketService();
+    final provider = AuthProvider(
+      apiClient: const FailingApiClient('Invalid credentials'),
+      storage: storage,
+      socketService: socket,
+    );
+
+    final succeeded = await provider.login(
+      username: 'demo',
+      password: 'wrong',
+    );
+
+    expect(succeeded, isFalse);
+    expect(provider.user, isNull);
+    expect(provider.isLoading, isFalse);
+    expect(provider.error, 'Invalid credentials');
+    provider.dispose();
+    await socket.dispose();
+  });
+
+  test('logout clears in-memory identity when socket cleanup fails', () async {
+    final storage = await freshStorage();
+    final socket = FailingDisconnectSocket();
+    final provider = AuthProvider(
+      apiClient: MockApiClient(),
+      storage: storage,
+      socketService: socket,
+    );
+    await provider.login(username: 'demo', password: 'secret');
+
+    await expectLater(provider.logout(), completes);
+
+    expect(provider.user, isNull);
+    expect(provider.isAuthenticated, isFalse);
+    expect(provider.isLoading, isFalse);
+    expect(provider.error, 'Logout cleanup failed');
+    expect(storage.getToken(), isNull);
+    provider.dispose();
+    await socket.disposeIgnoringFailure();
+  });
 }
 
 class FailingApiClient implements ApiClient {
@@ -168,4 +260,44 @@ class FailingApiClient implements ApiClient {
   }) {
     throw ApiException(message, statusCode: 401);
   }
+}
+
+class DelayedAuthApiClient implements ApiClient {
+  final _loginResponse = Completer<Map<String, dynamic>>();
+
+  void completeLogin(String username) {
+    _loginResponse.complete({
+      'token': 'late-jwt',
+      'user': {
+        'id': 'user_$username',
+        'username': username,
+        'fullName': 'Late Player',
+        'cash': 50000,
+      },
+    });
+  }
+
+  @override
+  Future<Map<String, dynamic>> get(String path) => _loginResponse.future;
+
+  @override
+  Future<Map<String, dynamic>> post(
+    String path, {
+    Map<String, dynamic>? body,
+  }) =>
+      _loginResponse.future;
+}
+
+class FailingClearStorage extends LocalStorage {
+  FailingClearStorage(super.preferences);
+
+  @override
+  Future<void> clearAuth() => throw StateError('storage cleanup failed');
+}
+
+class FailingDisconnectSocket extends MockSocketService {
+  @override
+  Future<void> disconnect() => throw StateError('socket cleanup failed');
+
+  Future<void> disposeIgnoringFailure() => super.dispose();
 }

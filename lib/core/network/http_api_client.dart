@@ -56,13 +56,27 @@ class HttpApiClient implements ApiClient {
         request.body = jsonEncode(body);
       }
 
-      final streamed = await _client.send(request).timeout(requestTimeout);
-      final response = await http.Response.fromStream(streamed);
-      final decoded = _decode(response);
+      final response = await (() async {
+        final streamed = await _client.send(request);
+        return http.Response.fromStream(streamed);
+      })()
+          .timeout(requestTimeout);
 
       if (response.statusCode == 401) {
-        await onUnauthorized?.call();
+        final decoded = _tryDecode(response);
+        Object? cleanupError;
+        try {
+          await onUnauthorized?.call();
+        } catch (error) {
+          cleanupError = error;
+        }
+        throw ApiException(
+          decoded?['message']?.toString() ?? 'Unauthorized',
+          statusCode: 401,
+          cause: cleanupError,
+        );
       }
+      final decoded = _decode(response);
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw ApiException(
           decoded['message']?.toString() ?? 'Request failed',
@@ -95,6 +109,15 @@ class HttpApiClient implements ApiClient {
         statusCode: response.statusCode,
         cause: error,
       );
+    }
+  }
+
+  Map<String, dynamic>? _tryDecode(http.Response response) {
+    try {
+      final value = jsonDecode(response.body);
+      return value is Map<String, dynamic> ? value : null;
+    } catch (_) {
+      return null;
     }
   }
 

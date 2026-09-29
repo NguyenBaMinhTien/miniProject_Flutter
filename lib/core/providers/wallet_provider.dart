@@ -29,6 +29,7 @@ class WalletProvider extends ChangeNotifier {
   final List<TransactionModel> _transactions = [];
   bool _isLoading = false;
   String? _error;
+  int _sessionGeneration = 0;
 
   double get cash => _cash;
   List<TransactionModel> get transactions =>
@@ -37,10 +38,12 @@ class WalletProvider extends ChangeNotifier {
   String? get error => _error;
 
   Future<bool> loadTransactions() async {
+    final generation = _sessionGeneration;
     _setLoading(true);
     _error = null;
     try {
       final response = await _apiClient.get(ApiEndpoints.transactions);
+      if (generation != _sessionGeneration) return false;
       final cashValue = response['cash'];
       final transactionValues = response['transactions'];
       if (cashValue is! num || transactionValues is! List) {
@@ -63,10 +66,11 @@ class WalletProvider extends ChangeNotifier {
         ..addAll(parsedTransactions);
       return true;
     } catch (error) {
+      if (generation != _sessionGeneration) return false;
       _error = _messageFor(error);
       return false;
     } finally {
-      _setLoading(false);
+      if (generation == _sessionGeneration) _setLoading(false);
     }
   }
 
@@ -77,6 +81,7 @@ class WalletProvider extends ChangeNotifier {
       return false;
     }
 
+    final generation = _sessionGeneration;
     _setLoading(true);
     _error = null;
     try {
@@ -84,6 +89,7 @@ class WalletProvider extends ChangeNotifier {
         ApiEndpoints.depositMock,
         body: {'amount': amount},
       );
+      if (generation != _sessionGeneration) return false;
       final cashValue = response['cash'];
       final transactionValue = response['transaction'];
       if (cashValue is! num || transactionValue is! Map) {
@@ -98,11 +104,21 @@ class WalletProvider extends ChangeNotifier {
       _upsertTransaction(transaction, prepend: true);
       return true;
     } catch (error) {
+      if (generation != _sessionGeneration) return false;
       _error = _messageFor(error);
       return false;
     } finally {
-      _setLoading(false);
+      if (generation == _sessionGeneration) _setLoading(false);
     }
+  }
+
+  void resetSession() {
+    _sessionGeneration++;
+    _cash = 0;
+    _transactions.clear();
+    _isLoading = false;
+    _error = null;
+    notifyListeners();
   }
 
   void _handleSocketEvent(SocketEvent event) {
@@ -160,6 +176,7 @@ class WalletProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _sessionGeneration++;
     unawaited(_subscription.cancel());
     super.dispose();
   }

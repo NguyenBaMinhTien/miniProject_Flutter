@@ -12,15 +12,16 @@ RacePhase racePhaseFromJson(Object? value) {
 }
 
 class RaceStateModel {
-  const RaceStateModel({
+  RaceStateModel({
     required this.raceId,
     required this.raceNumber,
     required this.phase,
     required this.countdown,
-    required this.horses,
-    required this.positions,
+    required List<HorseModel> horses,
+    required Map<String, double> positions,
     this.winnerId,
-  });
+  })  : horses = List<HorseModel>.unmodifiable(horses),
+        positions = Map<String, double>.unmodifiable(positions);
 
   factory RaceStateModel.fromJson(Map<String, dynamic> json) {
     final horsesJson = json['horses'] as List<dynamic>? ?? const [];
@@ -55,7 +56,7 @@ class RaceStateModel {
         'phase': phase.name.toUpperCase(),
         'countdown': countdown,
         'horses': horses.map((horse) => horse.toJson()).toList(),
-        'positions': positions,
+        'positions': Map<String, double>.from(positions),
         'winnerId': winnerId,
       };
 
@@ -99,7 +100,9 @@ class RaceStateModel {
         phase,
         countdown,
         Object.hashAll(horses),
-        Object.hashAllUnordered(positions.entries),
+        Object.hashAllUnordered(
+          positions.entries.map((entry) => Object.hash(entry.key, entry.value)),
+        ),
         winnerId,
       );
 }
