@@ -1,12 +1,12 @@
-// DEV 1 Scope: Core Mobile Models
+@Deprecated('Use BetModel')
 class Bet {
-  final String id;
-  final String horseId;
-  final double amount;
-
   const Bet({
     required this.id,
     required this.horseId,
     required this.amount,
   });
+
+  final String id;
+  final String horseId;
+  final double amount;
 }
