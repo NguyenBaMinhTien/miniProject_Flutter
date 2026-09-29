@@ -1,6 +1,7 @@
 // DEV 5 Scope: Auth UI, History, Profile, Audio & App Shell
 import 'package:flutter/material.dart';
 
+import 'audio/audio_controller.dart';
 import 'features/auth/screens/splash_screen.dart';
 import 'features/game/screens/game_screen.dart';
 import 'features/history/screens/history_screen.dart';
@@ -37,14 +38,28 @@ class MainAppShell extends StatefulWidget {
 }
 
 class _MainAppShellState extends State<MainAppShell> {
-  static const _screens = <Widget>[
-    GameScreen(),
-    WalletScreen(),
-    HistoryScreen(),
-    ProfileScreen(),
-  ];
+  late final AudioController _audioController;
+  late final List<Widget> _screens;
 
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _audioController = AudioController();
+    _screens = [
+      const GameScreen(),
+      const WalletScreen(),
+      const HistoryScreen(),
+      ProfileScreen(audioController: _audioController),
+    ];
+  }
+
+  @override
+  void dispose() {
+    _audioController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

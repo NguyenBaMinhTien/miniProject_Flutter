@@ -191,6 +191,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       icon: const Icon(Icons.person_add_alt_1_rounded),
                       label: const Text('Register'),
                     ),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        const Text('Already have an account?'),
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Log in'),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
