@@ -158,13 +158,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       label: const Text('Login'),
                     ),
                     const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        const Flexible(
-                          child: Text("Don't have an account?"),
-                        ),
-                        const SizedBox(width: 4),
+                        const Text("Don't have an account?"),
                         TextButton(
                           onPressed: _openRegister,
                           child: const Text('Register'),
