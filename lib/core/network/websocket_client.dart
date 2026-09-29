@@ -1,5 +1,6 @@
-// DEV 1 Scope: Core Mobile WebSocket Client
-class WebSocketClient {
-  void connect() {}
-  void disconnect() {}
+import '../socket/live_socket_service.dart';
+
+@Deprecated('Use LiveSocketService')
+class WebSocketClient extends LiveSocketService {
+  WebSocketClient({String url = 'ws://localhost:3000'}) : super(url: url);
 }
