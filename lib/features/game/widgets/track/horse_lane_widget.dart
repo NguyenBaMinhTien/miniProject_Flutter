@@ -39,11 +39,9 @@ class HorseLaneWidget extends StatelessWidget {
         height: RaceTrackSystem.laneHeight,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: laneNumber.isEven
-                ? RaceTrackSystem.grassDark
-                : RaceTrackSystem.grass,
+            color: Colors.transparent, // the lane background will be handled by the track
             border: const Border(
-              bottom: BorderSide(color: RaceTrackSystem.laneLine),
+              bottom: BorderSide(color: Colors.white24, width: 0.5),
             ),
           ),
           child: Row(
@@ -56,6 +54,7 @@ class HorseLaneWidget extends StatelessWidget {
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w800,
+                      shadows: [Shadow(color: Colors.black, blurRadius: 4)],
                     ),
                   ),
                 ),
@@ -66,7 +65,7 @@ class HorseLaneWidget extends StatelessWidget {
                     final travelWidth = mathMax(
                       0,
                       constraints.maxWidth -
-                          RaceTrackSystem.horseWidth -
+                          80 - // Horse sprite width
                           RaceTrackSystem.finishLineWidth,
                     );
                     final targetLeft = travelWidth * safePosition / 100;
@@ -76,13 +75,15 @@ class HorseLaneWidget extends StatelessWidget {
                       children: <Widget>[
                         TweenAnimationBuilder<double>(
                           key: Key('horse-position-${horse.id}'),
-                          tween: Tween<double>(begin: 0, end: targetLeft),
+                          tween: Tween<double>(begin: targetLeft, end: targetLeft),
+                          // Disable tweening here because the parent's camera movement 
+                          // plus tweening can look jerky. We rely on the parent updating states smoothly.
                           duration: phase.isRacing
-                              ? RaceTrackSystem.raceTickDuration
+                              ? const Duration(milliseconds: 100)
                               : RaceTrackSystem.idleMoveDuration,
                           curve: Curves.linear,
                           builder: (context, left, child) =>
-                              Positioned(left: left, top: 8, child: child!),
+                              Positioned(left: left, top: 4, child: child!),
                           child: Stack(
                             clipBehavior: Clip.none,
                             children: <Widget>[
@@ -90,7 +91,7 @@ class HorseLaneWidget extends StatelessWidget {
                                 const Positioned(
                                   key: Key('dust-effect'),
                                   left: -20,
-                                  top: 21,
+                                  top: 25,
                                   child: DustEffect(),
                                 ),
                               HorseSprite(
@@ -108,7 +109,7 @@ class HorseLaneWidget extends StatelessWidget {
                           bottom: 0,
                           width: RaceTrackSystem.finishLineWidth,
                           child: ColoredBox(
-                            color: Colors.black.withValues(alpha: 0.08),
+                            color: Colors.white.withValues(alpha: 0.8),
                           ),
                         ),
                       ],
