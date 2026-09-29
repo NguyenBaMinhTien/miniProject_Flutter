@@ -1,16 +1,3 @@
-// DEV 2 Scope: Race Track & Animations
-import 'package:flutter/material.dart';
-
-class RaceTrackWidget extends StatelessWidget {
-  const RaceTrackWidget({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox(
-      height: 200,
-      child: Center(
-        child: Text('Race Track Placeholder'),
-      ),
-    );
-  }
-}
+// Backward-compatible export for the original scaffold file name.
+export 'models/race_phase.dart';
+export 'race_track_widget.dart';
